@@ -1,0 +1,137 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2015 The Yudatun Open Source Project
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation
+#
+
+"""
+Given a root directory, produces an image with ext4 filesystem.
+Otherwise print usages.
+
+Usage: mkext4fs [flags] root_directory image_file
+
+  -s  (--size) <image_size>
+      The size of image.
+
+  -m  (--mount-point) <mount point>
+      The mount point of the special partition with image.
+
+  -T  (--timestamp) <timestamp>
+      The timestamp of image.
+
+  -l  (--label) <label>
+      The label of image.
+
+  -Z  (--gzip)
+      Generate image with gzip compressed.
+
+  -S  (--sparse)
+      Generate image with sparse file.
+
+  -C  (--crc)
+      Generate image with crc checksum.
+
+"""
+
+import os
+import sys
+
+import common
+
+OPTIONS = common.OPTIONS
+OPTIONS.image_size = None
+OPTIONS.mount_point = None
+OPTIONS.timestamp = None
+OPTIONS.label = None
+OPTIONS.gzip = False
+OPTIONS.sparse = False
+OPTIONS.crc = False
+
+def makeExt4Fs(input_directory, output_file):
+  """Make an image to output_file from input_directory with OPTIONS.
+
+  Args:
+    input_directory: path of input directory.
+    output_file: path of the output image file.
+
+  Returns:
+    True if the image is build successfully.
+  """
+
+  cmd = ["mkext4fs"]
+  if OPTIONS.image_size is not None:
+    cmd.extend(["-s", OPTIONS.image_size])
+  if OPTIONS.mount_point is not None:
+    cmd.extend(["-m", OPTIONS.mount_point])
+  if OPTIONS.timestamp is not None:
+    cmd.extend(["-T", OPTIONS.timestamp])
+  if OPTIONS.label is not None:
+    cmd.extend(["-l", OPTIONS.label])
+  if OPTIONS.gzip is True:
+    cmd.append("-Z")
+  if OPTIONS.sparse is True:
+    cmd.append("-S")
+  if OPTIONS.crc is True:
+    cmd.append("-C")
+  cmd.append(input_directory)
+  cmd.append(output_file)
+
+  try:
+    p = common.run(cmd)
+  except Exception, e:
+    print "Error: Unable to execute command: {}".format(' '.join(cmd))
+    raise e
+
+  p.wait()
+  assert p.returncode == 0, "mkext4fs failed"
+
+def main(argv):
+
+  def option_handler(opt, arg):
+    if opt in ("-s", "--size"):
+      OPTIONS.image_size = arg
+    elif opt in ("-m", "--mount-point"):
+      OPTIONS.mount_point = arg
+    elif opt in ("-T", "--timestamp"):
+      OPTIONS.timestamp = arg
+    elif opt in ("-l", "--label"):
+      OPTIONS.label = arg
+    elif opt in ("-Z", "--gzip"):
+      OPTIONS.gzip = True
+    elif opt in ("-S", "--sparse"):
+      OPTIONS.sparse = True
+    elif opt in ("-C", "--crc"):
+      OPTIONS.crc = True
+    else:
+      return False
+    return True
+
+  args = common.parseOptions(argv, __doc__,
+                             extra_opts="s:m:T:l:ZSC",
+                             extra_long_opts=[
+                               "size=",
+                               "mount-point=",
+                               "timestamp=",
+                               "label=",
+                               "gzip",
+                               "sparse",
+                               "crc",
+                             ],
+                             extra_option_handler=option_handler)
+  if len(args) != 2:
+    common.usage(__doc__)
+    sys.exit(1)
+
+  makeExt4Fs(args[0], args[1])
+
+if __name__ == '__main__':
+  try:
+    main(sys.argv[1:])
+  except RuntimeError, e:
+    print
+    print "Error: %s" % (e,)
+    print
+    sys.exit(1)

@@ -1,0 +1,120 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2015 The Yudatun Open Source Project
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation
+#
+
+"""
+Given a root directory, produces an image with vfat filesystem.
+Otherwise print usages.
+
+Usage: mkvfatfs [flags] root_directory image_file
+
+  -s  (--size) <image_size>
+      The size of image.
+
+  -t  (--title) <title>
+      The title of image.
+
+"""
+
+import os
+import sys
+
+import common
+
+OPTIONS = common.OPTIONS
+OPTIONS.image_size = 0
+OPTIONS.image_title = None
+
+def putFatFile(image, src_file, dst_file):
+  cmd = ["mcopy", "-s", "-Q", "-i", image, src_file, "::" + dst_file]
+  try:
+    p = common.run(cmd)
+  except Exception, e:
+    print "Error: Unable to execute command: {}".format(' '.join(cmd))
+    raise e
+
+  p.wait()
+  assert p.returncode == 0, "couldn't insert %s into FAT image" % (src_file)
+
+def makeVfatFs(root, image, size=0, title="boot"):
+  """Create a vfat filesystem image with all the files in the provided
+  root directory. The size of the system, if not provided by the caller,
+  will be 101% the size of the containing files"""
+  if size == 0:
+    for dpath, dnames, fnames in os.walk(root):
+      for f in fnames:
+        size += os.path.getsize(os.path.join(dpath, f))
+
+    # Add %1 extra space, minimum 32K
+    extra = size / 100
+    if extra < (32 * 1024):
+      extra = 32 * 1024
+    size += extra
+
+  # Round the size of the disk up to 32K to that total sectors is
+  # a multiple of sectors per track (mtools complains otherwise)
+  mod = size % (32 * 1024)
+  if mod != 0:
+    size = size + (32 * 1024) - mod
+
+  if os.path.exists(image):
+    os.unlink(image)
+
+  if title is None:
+    title = "boot"
+
+  cmd = ["mkdosfs", "-n", title, "-C", image, str(size/ 1024)]
+  try:
+    p = common.run(cmd)
+  except Exception, e:
+    print "Error: Unable to execute command: {}".format(' '.join(cmd))
+    raise e
+
+  p.wait()
+  assert p.returncode == 0, "mkdosfs failed"
+  for f in os.listdir(root):
+    src_file = os.path.join(root, f)
+    dst_file = os.path.relpath(src_file, root)
+    putFatFile(image, src_file, dst_file)
+
+def main(argv):
+
+  def option_handler(opt, arg):
+    if opt in ("-s", "--size"):
+      if arg.isdigit():
+        OPTIONS.image_size = int(arg)
+      else:
+        raise ValueError("Cannot parse value %r for option %r - only "
+                 "integers are allowd." % (arg, opt))
+    elif opt in ("-t", "--title"):
+      OPTIONS.image_title = arg
+    else:
+      return False
+    return True
+
+  args = common.parseOptions(argv, __doc__,
+                             extra_opts="s:t:",
+                             extra_long_opts=[
+                               "size=",
+                               "title=",
+                             ],
+                             extra_option_handler=option_handler)
+  if len(args) != 2:
+    common.usage(__doc__)
+    sys.exit(1)
+
+  makeVfatFs(args[0], args[1], OPTIONS.image_size, OPTIONS.image_title)
+
+if __name__ == '__main__':
+  try:
+    main(sys.argv[1:])
+  except RuntimeError, e:
+    print
+    print "Error: %s" % (e,)
+    print
+    sys.exit(1)

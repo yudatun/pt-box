@@ -1,0 +1,140 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2015 The Yudatun Open Source Project
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2 as
+# published by the Free Software Foundation
+#
+
+"""
+Given a partition xml, produces an image with special partition table.
+
+Usage: mkpart [flags] partition.xml
+
+  -x  (--xml) <partition.xml>
+      The partition XML file for descript partition table.
+
+  -t  (--type) <partition table type>
+      The partition table type.
+
+  -o  (--output) <output directory>
+      The output directory of image files.
+
+  -b  (--mbr-boot)
+      The flag add boot code for MBR. Only for MBR
+
+  -g  (--sequential-guid)
+      The flag of sequential guid. Only for GPT
+
+  -a  (--all-128partitions)
+      The flag was set, will be use all of 128 partitions to count crc23
+      for entry array. Only for GPT
+
+"""
+
+import os
+import sys
+import re
+import random
+
+import common
+import parser
+import pt
+import mbr
+import gpt
+
+OPTIONS = common.OPTIONS
+OPTIONS.xml = None
+OPTIONS.part_type = None
+OPTIONS.output_directory = None
+# Only MBR
+OPTIONS.MBR_boot = None
+# Only GPT
+OPTIONS.sequential_guid = False
+OPTIONS.all_128_partitions = False
+
+PARSER       = parser.PARSER
+INSTRUCTIONS = pt.INSTRUCTIONS
+PARTITIONS   = pt.PARTITIONS
+BUG          = pt.BUG
+
+def make(xml):
+  """Create a partition table image with the file in the provided
+  partition.xml. image is the name of partition table."""
+
+  PARTITIONS._type = OPTIONS.part_type
+
+  PARSER.xml2object(xml)
+
+  if PARTITIONS._type is PARTITIONS.GPT_TYPE:
+    print "GPT GUID discovered in XML file, output will be GPT ..."
+    print "Making GUID Partition table (GPT). %d partitions ...\n" \
+      % len(PARTITIONS.part_list)
+
+    MY_GPT_PARTITION_TABLE = gpt.GPTPartitionTable()
+    MY_GPT_PARTITION_TABLE.create(OPTIONS.output_directory)
+
+  elif PARTITIONS._type is PARTITIONS.MBR_TYPE:
+    print "MBR TYPE discovered in XML file, output will be MBR ..."
+    print "Making MBR Partition table (MBR). %d partitions ...\n" \
+      % len(PARTITIONS.part_list)
+
+    MY_MBR_PARTITION_TABLE = mbr.MBRPartitionTable()
+    MY_MBR_PARTITION_TABLE.create(OPTIONS.output_directory, OPTIONS.MBR_boot)
+
+  else:
+    BUG.error("Invalidate the type of partition table (%s)." % PARTITIONS._type)
+
+def main(argv):
+
+  def option_handler(opt, arg):
+    if opt in ("-x", "--xml"):
+      OPTIONS.xml = arg
+    elif opt in ("-t", "--type"):
+      OPTIONS.part_type = arg
+    elif opt in ("-o", "--output"):
+      OPTIONS.output_directory = arg
+    elif opt in ("-b", "--mbr-boot"):
+      OPTIONS.MBR_boot = arg
+    elif opt in ("-g", "--sequential-guid"):
+      OPTIONS.sequential_guid = True
+    elif opt in ("-a", "--all-128partitions"):
+      OPTIONS.all_128_partitions = True
+    else:
+      return False
+    return True
+
+  args = common.parseOptions(argv, __doc__,
+                             extra_opts="x:t:o:b:ga",
+                             extra_long_opts=[
+                               "xml=",
+                               "type=",
+                               "output=",
+                               "mbr-boot=",
+                               "sequential-guid",
+                               "all-128partitions",
+                             ],
+                             extra_option_handler=option_handler)
+
+  if len(args) != 0:
+    common.usage(__doc__)
+    sys.exit(1)
+
+  if OPTIONS.xml is None:
+    common.usage(__doc__)
+    sys.exit(1)
+
+  if OPTIONS.output_directory is None:
+    OPTIONS.output_directory = "./"
+
+  make(OPTIONS.xml)
+
+if __name__ == '__main__':
+  try:
+    main(sys.argv[1:])
+  except RuntimeError, e:
+    print
+    print "Error: %s" % (e,)
+    print
+    sys.exit(1)
