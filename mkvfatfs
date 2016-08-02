@@ -48,7 +48,9 @@ def makeVfatFs(root, image, size=0, title="boot"):
   if size == 0:
     for dpath, dnames, fnames in os.walk(root):
       for f in fnames:
-        size += os.path.getsize(os.path.join(dpath, f))
+        abspath = os.path.join(dpath, f)
+        if os.path.exists(abspath):
+          size += os.path.getsize(abspath)
 
     # Add %1 extra space, minimum 32K
     extra = size / 100
