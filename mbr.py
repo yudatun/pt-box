@@ -161,11 +161,12 @@ class MBR(object):
       last_lba = first_lba + part.size_in_sec
 
     if needs_ebr is True:
+      next_part = PARTITIONS.part_list[i+1]
       entry = Entry()
       entry.bootable    = 0x00
       entry.part_type   = 0x05
-      entry.first_lba   = first_lba = last_lba
-      entry.num_sectors = 0
+      entry.first_lba   = last_lba
+      entry.num_sectors = next_part.size_in_sec
       entry.toarray()
       self.add_entry(entry)
 
@@ -225,11 +226,12 @@ class EBR(object):
       last_lba = first_lba + part.size_in_sec
 
       entry2 = Entry()
-      if i < part_num:
+      if i != (part_num - 1):
+        next_part = PARTITIONS.part_list[i+1]
         entry2.bootable  = 0x00
         entry2.part_type = 0x05
         entry2.first_lba = last_lba
-        entry2.num_sectors = 1
+        entry2.num_sectors = next_part.size_in_sec
         entry2.toarray()
       else:
         entry2.toarray()
@@ -265,4 +267,4 @@ class MBRPartitionTable(object):
     else:
       print "We will need an MBR and %d EBRS" % (part_num - 3)
       (first_lba, last_lba) = self.mbr.create(output_directory, boot_file, 3, True)
-      self.ebr.create(output_directory, part_num, first_lba)
+      self.ebr.create(output_directory, part_num, last_lba)

@@ -15,14 +15,14 @@
 
     <partition label="recovery"
                size_in_kb="65536"
-               type="0x0d"
+               type="0x0c"
                bootable="false"
                readonly="true"
                filename="recovery.img" />
 
     <partition label="cache"
                size_in_kb="131072"
-               type="0x0e"
+               type="0x83"
                bootable="false"
                readonly="false"
                filename="cache.img" />
@@ -37,7 +37,7 @@
 
     <partition label="userdata"
                size_in_kb="131072"
-               type="0x84"
+               type="0x83"
                bootable="false"
                readonly="false"
                filename="userdata.img"
