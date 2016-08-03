@@ -6,20 +6,42 @@
 
   <physical_partition>
     <partition label="boot"
-               first_lba_in_kb="4096"
-               size_in_kb="57344"
+               first_lba_in_kb="1"
+               size_in_kb="65536"
                type="0x0c"
                bootable="false"
                readonly="true"
-               filename="boot.img"/>
+               filename="boot.img" />
+
+    <partition label="recovery"
+               size_in_kb="65536"
+               type="0x0d"
+               bootable="false"
+               readonly="true"
+               filename="recovery.img" />
+
+    <partition label="cache"
+               size_in_kb="131072"
+               type="0x0e"
+               bootable="false"
+               readonly="false"
+               filename="cache.img" />
 
     <partition label="system"
-               size_in_kb="3138560"
+               size_in_kb="262144"
                type="0x83"
                bootable="false"
                readonly="true"
                filename="system.img"
-               sparse="true"/>
+               sparse="true" />
+
+    <partition label="userdata"
+               size_in_kb="131072"
+               type="0x84"
+               bootable="false"
+               readonly="false"
+               filename="userdata.img"
+               sparse="true" />
   </physical_partition>
 
 </configuration>

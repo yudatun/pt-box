@@ -125,7 +125,7 @@ class MBR(object):
     self.array[self.magic_0_start] = self.magic_0
     self.array[self.magic_1_start] = self.magic_1
 
-  def init_partition_table(self, part_num):
+  def init_partition_table(self, part_num, needs_ebr):
 
     kb_per_bulk = INSTRUCTIONS.WRITE_PROTECT_BULK_SIZE_IN_KB
     sectors_per_bulk = pt.kb2sectors(kb_per_bulk)
@@ -160,30 +160,109 @@ class MBR(object):
 
       last_lba = first_lba + part.size_in_sec
 
-  def create(self, output_directory, boot_file, part_num):
+    if needs_ebr is True:
+      entry = Entry()
+      entry.bootable    = 0x00
+      entry.part_type   = 0x05
+      entry.first_lba   = first_lba = last_lba
+      entry.num_sectors = 0
+      entry.toarray()
+      self.add_entry(entry)
 
-    image_file = "%sMBR.bin" % output_directory
+    return (first_lba, last_lba)
+
+  def create(self, output_directory, boot_file, part_num, needs_ebr):
 
     self.binfile2code(boot_file)
     self.signature = INSTRUCTIONS.DISK_SIGNATURE
-    self.init_partition_table(part_num)
+    (first_lba, last_lba) = self.init_partition_table(part_num, needs_ebr)
     self.toarray()
 
+    image_file = "%s/MBR.bin" % output_directory
     BUG.green("Create %s <-- Master Boot Recorder" % image_file)
     with open(image_file, 'wb') as f:
       for b in self.array:
         f.write(struct.pack('B', b))
+      f.close()
+
+    return (first_lba, last_lba)
+
+class EBR(object):
+
+  def __init__(self):
+    self.items = []
+
+  def create(self, output_directory, part_num, start_lba):
+    first_lba = last_lba = start_lba + (part_num - 3)
+
+    print "About to make EBR, first_lba=%i, last_lba=%i" % (first_lba, last_lba)
+    kb_per_bulk = INSTRUCTIONS.WRITE_PROTECT_BULK_SIZE_IN_KB
+    sectors_per_bulk = pt.kb2sectors(kb_per_bulk)
+    for i in range(3, part_num):
+      part = PARTITIONS.part_list[i]
+      last_wp_chunk = PARTITIONS.wp_chunk_list[-1]
+
+      if part.first_lba_in_kb > 0:
+        first_lba = pt.kb2sectors(part.first_lba_in_kb)
+      if first_lba < last_lba:
+        first_lba = last_lba
+
+      part.readonly = True
+      PARTITIONS.update_wp_chunk_list(first_lba, part.size_in_sec, sectors_per_bulk)
+
+      entry1 = Entry()
+      if part.bootable is True:
+        entry1.bootable = 0x80
+      else:
+        entry1.bootable  = 0x00
+      entry1.part_type   = part._type
+      entry1.first_lba   = first_lba
+      entry1.num_sectors = part.size_in_sec
+      entry1.toarray()
+      mbr = MBR()
+      mbr.add_entry(entry1)
+
+      last_lba = first_lba + part.size_in_sec
+
+      entry2 = Entry()
+      if i < part_num:
+        entry2.bootable  = 0x00
+        entry2.part_type = 0x05
+        entry2.first_lba = last_lba
+        entry2.num_sectors = 1
+        entry2.toarray()
+      else:
+        entry2.toarray()
+      mbr.add_entry(entry2)
+
+      empty_entry  = Entry()
+      empty_entry.toarray()
+      mbr.add_entry(empty_entry)
+      mbr.add_entry(empty_entry)
+
+      mbr.toarray()
+      self.items.append(mbr)
+
+    image_file = "%s/EBR.bin" % output_directory
+    BUG.green("Create %s <-- Extented Boot Recorder" % image_file)
+    with open(image_file, 'wb') as f:
+      for e in self.items:
+        for b in e.array:
+          f.write(struct.pack('B', b))
+      f.close()
 
 class MBRPartitionTable(object):
 
   def __init__(self):
     self.mbr = MBR()
-    self.ebr = None
+    self.ebr = EBR()
 
   def create(self, output_directory, boot_file):
     part_num = len(PARTITIONS.part_list)
     if part_num <= 4:
       print "We can get away with only an MBR"
-      self.mbr.create(output_directory, boot_file, part_num)
+      self.mbr.create(output_directory, boot_file, part_num, False)
     else:
-      print "We will need an MBR and %d EBRS" % (self.part_num - 3)
+      print "We will need an MBR and %d EBRS" % (part_num - 3)
+      (first_lba, last_lba) = self.mbr.create(output_directory, boot_file, 3, True)
+      self.ebr.create(output_directory, part_num, first_lba)
