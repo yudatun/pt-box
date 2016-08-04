@@ -155,18 +155,18 @@ class MBR(object):
       entry.first_lba   = first_lba
       entry.num_sectors = part.size_in_sec
       entry.toarray()
-
       self.add_entry(entry)
 
       last_lba = first_lba + part.size_in_sec
 
+      print "* %-10s: %-8i ~ %8i" % (part.label, first_lba, last_lba)
+
     if needs_ebr is True:
-      next_part = PARTITIONS.part_list[i+1]
       entry = Entry()
       entry.bootable    = 0x00
       entry.part_type   = 0x05
       entry.first_lba   = last_lba
-      entry.num_sectors = next_part.size_in_sec
+      entry.num_sectors = 0
       entry.toarray()
       self.add_entry(entry)
 
@@ -194,17 +194,17 @@ class EBR(object):
     self.items = []
 
   def create(self, output_directory, part_num, start_lba):
-    first_lba = last_lba = start_lba + (part_num - 3)
+    print "About to make EBR: %i" % start_lba
 
-    print "About to make EBR, first_lba=%i, last_lba=%i" % (first_lba, last_lba)
+    ebr_offset = 0
+    first_lba = last_lba = (start_lba + part_num - 3)
+
     kb_per_bulk = INSTRUCTIONS.WRITE_PROTECT_BULK_SIZE_IN_KB
     sectors_per_bulk = pt.kb2sectors(kb_per_bulk)
     for i in range(3, part_num):
       part = PARTITIONS.part_list[i]
       last_wp_chunk = PARTITIONS.wp_chunk_list[-1]
 
-      if part.first_lba_in_kb > 0:
-        first_lba = pt.kb2sectors(part.first_lba_in_kb)
       if first_lba < last_lba:
         first_lba = last_lba
 
@@ -217,7 +217,7 @@ class EBR(object):
       else:
         entry1.bootable  = 0x00
       entry1.part_type   = part._type
-      entry1.first_lba   = first_lba
+      entry1.first_lba   = first_lba - start_lba - ebr_offset
       entry1.num_sectors = part.size_in_sec
       entry1.toarray()
       mbr = MBR()
@@ -225,16 +225,15 @@ class EBR(object):
 
       last_lba = first_lba + part.size_in_sec
 
+      print "* %-10s: %-8i ~ %8i" % (part.label, first_lba, last_lba)
+
       entry2 = Entry()
-      if i != (part_num - 1):
-        next_part = PARTITIONS.part_list[i+1]
+      if i < (part_num - 1):
         entry2.bootable  = 0x00
         entry2.part_type = 0x05
-        entry2.first_lba = last_lba
-        entry2.num_sectors = next_part.size_in_sec
-        entry2.toarray()
-      else:
-        entry2.toarray()
+        entry2.first_lba = i - 2
+        entry2.num_sectors = 1
+      entry2.toarray()
       mbr.add_entry(entry2)
 
       empty_entry  = Entry()
@@ -244,6 +243,7 @@ class EBR(object):
 
       mbr.toarray()
       self.items.append(mbr)
+      ebr_offset += 1
 
     image_file = "%s/EBR.bin" % output_directory
     BUG.green("Create %s <-- Extented Boot Recorder" % image_file)

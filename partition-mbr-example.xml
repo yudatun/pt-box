@@ -2,11 +2,12 @@
 <configuration>
   <parser_instructions>
     DISK_SIGNATURE = 0xf72a20a6
+    AUTO_GROW_LAST_PARTITION = true
   </parser_instructions>
 
   <physical_partition>
     <partition label="boot"
-               first_lba_in_kb="1"
+               first_lba_in_kb="0"
                size_in_kb="65536"
                type="0x0c"
                bootable="false"
